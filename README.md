@@ -9,13 +9,13 @@ gcc -o main main.c
  -> ./main 0
 
 2.2 - Depois em OUTRO terminal rodar os workers
- -> ./main 1
- -> ./main 2
- -> ./main 3
- -> ./main 4
- -> ./main 5
- -> ./main 6
- -> ./main 7
- -> ./main 8
+-> ./main 1
+-> ./main 2
+-> ./main 3
+-> ./main 4
+-> ./main 5
+-> ./main 6
+-> ./main 7
+-> ./main 8
 
 Um de cada vez!!!!!!!!!!!!!!
