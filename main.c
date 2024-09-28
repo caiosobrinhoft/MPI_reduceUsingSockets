@@ -3,81 +3,93 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <limits.h>
 #include <time.h>
 
 #define PORT_MANAGER 8080
-#define PORT_WORKER0 8081
-#define PORT_WORKER1 8082
-#define PORT_WORKER2 8083
-#define PORT_WORKER3 8084
-#define PORT_WORKER4 8085
-#define PORT_WORKER5 8086
-#define PORT_WORKER6 8087
-#define PORT_WORKER7 8088
+#define NUM_WORKERS 8
 
-void manager() {
-    int managerSocket, workerSocket;
-    struct sockaddr_in managerAddress, workerAddress;
-    int max_value = INT_MIN;
-    int worker_values[8];
-    
-    // Configuração do socket do gerente
-    managerSocket = socket(AF_INET, SOCK_STREAM, 0);
-    managerAddress.sin_family = AF_INET;
-    managerAddress.sin_port = htons(PORT_MANAGER);
-    managerAddress.sin_addr.s_addr = INADDR_ANY;
-    bind(managerSocket, (struct sockaddr *)&managerAddress, sizeof(managerAddress));
-    listen(managerSocket, 8);
-    
-    // Receber valores dos trabalhadores
-    for (int i = 0; i < 8; i++) {
-        socklen_t addr_size = sizeof(workerAddress);
-        workerSocket = accept(managerSocket, (struct sockaddr *)&workerAddress, &addr_size);
-        recv(workerSocket, &worker_values[i], sizeof(int), 0);
-        close(workerSocket);
-        if (worker_values[i] > max_value) {
-            max_value = worker_values[i];
+int main() {
+    int server_fd, new_socket;
+    struct sockaddr_in address;
+    int opt = 1;
+    int addrlen = sizeof(address);
+    int result = 0;
+    int values[NUM_WORKERS];
+
+    // Gerar valores aleatórios
+    srand(time(0));
+    for (int i = 0; i < NUM_WORKERS; i++) {
+        values[i] = rand() % 100; // Gerar valores aleatórios entre 0 e 99
+        printf("Worker %d will use value: %d\n", i + 1, values[i]);
+    }
+
+    // Criar socket
+    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+        perror("socket failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Definir opções do socket
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    // Configurar endereço do servidor
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_port = htons(PORT_MANAGER);
+
+    // Associar o socket ao endereço
+    bind(server_fd, (struct sockaddr *)&address, sizeof(address));
+    listen(server_fd, NUM_WORKERS);
+
+    printf("Manager is listening on port %d...\n", PORT_MANAGER);
+
+    // Criar trabalhadores
+    for (int i = 0; i < NUM_WORKERS; i++) {
+        if (fork() == 0) {
+            // Processo filho (trabalhador)
+            int worker_id = i + 1;
+            int sock = 0;
+            struct sockaddr_in serv_addr;
+
+            // Criar socket para o trabalhador
+            if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+                printf("\n Socket creation error \n");
+                return -1;
+            }
+
+            serv_addr.sin_family = AF_INET;
+            serv_addr.sin_port = htons(PORT_MANAGER);
+
+            // Converter IPv4 e IPv6 endereços de texto para binário
+            if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0) {
+                printf("\nInvalid address/ Address not supported \n");
+                return -1;
+            }
+
+            // Conectar ao gerente
+            if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+                printf("\nConnection Failed \n");
+                return -1;
+            }
+
+            // Enviar o valor gerado para o gerente
+            send(sock, &values[i], sizeof(values[i]), 0);
+            close(sock);
+            exit(0); // Finaliza o trabalhador
         }
     }
-    
-    printf("Resultado final da redução (max): %d\n", max_value);
-    close(managerSocket);
-}
 
-void worker(int worker_id) {
-    int workerSocket;
-    struct sockaddr_in managerAddress;
-    int value = rand() % 100; // Gera um valor aleatório entre 0 e 99
-    
-    // Configuração do socket do trabalhador
-    workerSocket = socket(AF_INET, SOCK_STREAM, 0);
-    managerAddress.sin_family = AF_INET;
-    managerAddress.sin_port = htons(PORT_MANAGER);
-    managerAddress.sin_addr.s_addr = INADDR_ANY;
-    
-    connect(workerSocket, (struct sockaddr *)&managerAddress, sizeof(managerAddress));
-    send(workerSocket, &value, sizeof(int), 0);
-    close(workerSocket);
-    
-    printf("Trabalhador %d enviou valor: %d\n", worker_id, value);
-}
+    // Receber resultados dos trabalhadores
+    for (int i = 0; i < NUM_WORKERS; i++) {
+        new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen);
+        int received_value;
+        read(new_socket, &received_value, sizeof(received_value));
+        printf("Received value from worker %d: %d\n", i + 1, received_value);
+        result += received_value;
+        close(new_socket);
+    }
 
-int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        fprintf(stderr, "Uso: %s <tipo>\n", argv[0]);
-        exit(1);
-    }
-    
-    int tipo = atoi(argv[1]);
-    
-    srand(time(NULL) + tipo); // Inicializa o gerador de números aleatórios com uma semente diferente para cada trabalhador
-    
-    if (tipo == 0) {
-        manager();
-    } else {
-        worker(tipo - 1);
-    }
-    
+    printf("Final result (sum): %d\n", result);
+
     return 0;
 }
