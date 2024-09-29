@@ -5,6 +5,12 @@
 #include <arpa/inet.h>
 #include <time.h>
 
+// GRUPO
+// CAIO SOBRINHO DA SILVA
+// IGOR RICCI CONSTANTINO
+// MATHEUS YOSHIMITSU TAMASHIRO PIREZ LANZO
+
+
 #define PORT_MANAGER 8080
 #define NUM_WORKERS 8
 
